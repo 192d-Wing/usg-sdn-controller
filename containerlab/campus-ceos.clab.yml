@@ -1,0 +1,61 @@
+# containerlab topology matching examples/campus-fabric-3tier.yaml.
+# All nodes are cEOS-lab (Arista); AOS-CX / Junos / NX-OS / IOS-XE
+# can't run in containers, so they need their own integration harness.
+#
+# Usage:
+#     make lab-up       # render configs + deploy
+#     make lab-verify   # assert BGP/EVPN state
+#     make lab-down
+#
+# The "startup-config" for each node is written by
+# containerlab/scripts/render_lab_configs.py before deploy.
+
+name: campus-ceos
+mgmt:
+  network: usg-sdn-mgmt
+  ipv4-subnet: 172.20.20.0/24
+
+topology:
+  kinds:
+    ceos:
+      image: ceos:latest      # override with CEOS_IMAGE env var
+      env:
+        INTFTYPE: eth
+
+  nodes:
+    ssp1:
+      kind: ceos
+      mgmt-ipv4: 172.20.20.11
+      startup-config: configs/ssp1.cfg
+    ssp2:
+      kind: ceos
+      mgmt-ipv4: 172.20.20.12
+      startup-config: configs/ssp2.cfg
+    sp1:
+      kind: ceos
+      mgmt-ipv4: 172.20.20.21
+      startup-config: configs/sp1.cfg
+    sp2:
+      kind: ceos
+      mgmt-ipv4: 172.20.20.22
+      startup-config: configs/sp2.cfg
+    lf1:
+      kind: ceos
+      mgmt-ipv4: 172.20.20.31
+      startup-config: configs/lf1.cfg
+    lf2:
+      kind: ceos
+      mgmt-ipv4: 172.20.20.32
+      startup-config: configs/lf2.cfg
+
+  links:
+    # leaf ↔ spine
+    - endpoints: ["lf1:eth1", "sp1:eth1"]
+    - endpoints: ["lf1:eth2", "sp2:eth1"]
+    - endpoints: ["lf2:eth1", "sp1:eth2"]
+    - endpoints: ["lf2:eth2", "sp2:eth2"]
+    # spine ↔ super-spine
+    - endpoints: ["sp1:eth3", "ssp1:eth1"]
+    - endpoints: ["sp1:eth4", "ssp2:eth1"]
+    - endpoints: ["sp2:eth3", "ssp1:eth2"]
+    - endpoints: ["sp2:eth4", "ssp2:eth2"]

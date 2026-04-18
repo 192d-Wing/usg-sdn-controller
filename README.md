@@ -84,6 +84,17 @@ the right call.
 - Every push stages through the vendor's candidate store (NETCONF) or a REST
   checkpoint (AOS-CX) with rollback-on-error.
 
+## Integration test
+
+`make integration` brings up a six-node cEOS-lab fabric under
+[containerlab](https://containerlab.dev) matching `examples/campus-fabric-3tier.yaml`,
+pushes the rendered configs, and asserts IS-IS + underlay-BGP + EVPN-BGP
+convergence. See [`containerlab/README.md`](containerlab/README.md).
+
+CI runs ruff + pytest on every push/PR (`.github/workflows/ci.yml`);
+`.github/workflows/integration.yml` runs `make integration` nightly on any
+self-hosted runner labeled `clab`.
+
 ## Status
 
 Pre-alpha scaffold. Templates are starting points — verify against your OS version.

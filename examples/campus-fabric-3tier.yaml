@@ -32,10 +32,10 @@ fabric:
     - { a_node: lf2, a_iface: Ethernet1, b_node: sp1, b_iface: Ethernet2 }
     - { a_node: lf2, a_iface: Ethernet2, b_node: sp2, b_iface: Ethernet2 }
     # spine ↔ super-spine
-    - { a_node: sp1, a_iface: Ethernet48, b_node: ssp1, b_iface: Ethernet1 }
-    - { a_node: sp1, a_iface: Ethernet47, b_node: ssp2, b_iface: Ethernet1 }
-    - { a_node: sp2, a_iface: Ethernet48, b_node: ssp1, b_iface: Ethernet2 }
-    - { a_node: sp2, a_iface: Ethernet47, b_node: ssp2, b_iface: Ethernet2 }
+    - { a_node: sp1, a_iface: Ethernet3, b_node: ssp1, b_iface: Ethernet1 }
+    - { a_node: sp1, a_iface: Ethernet4, b_node: ssp2, b_iface: Ethernet1 }
+    - { a_node: sp2, a_iface: Ethernet3, b_node: ssp1, b_iface: Ethernet2 }
+    - { a_node: sp2, a_iface: Ethernet4, b_node: ssp2, b_iface: Ethernet2 }
 
 tenants:
   - name: corp

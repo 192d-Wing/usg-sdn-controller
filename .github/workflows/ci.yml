@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
+          restore-keys: ${{ runner.os }}-pip-
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '.[dev]'
+
+      - name: Ruff
+        run: ruff check src tests
+
+      - name: Mypy
+        run: mypy src
+        continue-on-error: true   # strict mode is a north-star; don't block PRs yet
+
+      - name: Pytest
+        run: pytest -q
+
+      - name: Render every vendor against the example fabrics
+        # Fast smoke test that catches template regressions beyond what the
+        # unit suite covers (import-time failures, YAML drift, etc.).
+        run: |
+          python - <<'PY'
+          import yaml
+          from usg_sdn.models.intent import IntentDocument
+          from usg_sdn.models.inventory import Device, DeviceCredential, Vendor
+          from usg_sdn.render import render_device
+
+          for path in ("examples/campus-fabric.yaml", "examples/campus-fabric-3tier.yaml"):
+              doc = IntentDocument.model_validate(yaml.safe_load(open(path).read()))
+              for node in doc.fabric.nodes:
+                  for vendor in Vendor:
+                      dev = Device(
+                          name=node.inventory_ref,
+                          vendor=vendor,
+                          mgmt_address="fd00::1",
+                          credential=DeviceCredential(username="sdn"),
+                      )
+                      render_device(doc, dev)
+              print(f"{path}: rendered {len(doc.fabric.nodes)} nodes x {len(list(Vendor))} vendors")
+          PY

@@ -39,3 +39,8 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+
+# containerlab artefacts
+containerlab/configs/
+containerlab/clab-*/
+containerlab/*.log

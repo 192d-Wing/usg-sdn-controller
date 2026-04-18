@@ -1,0 +1,49 @@
+name: Integration (containerlab)
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    # Nightly 05:00 UTC. Only runs if a self-hosted runner with label `clab`
+    # is registered; otherwise the job queues and is harmless.
+    - cron: "0 5 * * *"
+
+jobs:
+  lab:
+    # Requires a self-hosted runner with Docker, containerlab, and a
+    # locally-imported cEOS-lab image tagged `ceos:latest`.
+    runs-on: [self-hosted, clab]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '.[dev]'
+
+      - name: Show tooling versions
+        run: |
+          docker --version
+          containerlab version
+          python --version
+
+      - name: Run integration
+        run: make integration
+
+      - name: Collect node configs on failure
+        if: failure()
+        run: |
+          mkdir -p artifacts
+          cp -r containerlab/configs artifacts/ || true
+          docker ps -a > artifacts/docker-ps.txt || true
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: clab-failure-${{ github.run_id }}
+          path: artifacts/
