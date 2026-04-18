@@ -1,12 +1,11 @@
-{# IOS-XE EVPN overlay — explicit IPv6 link-local neighbors per interface.
-   Requires Catalyst 9300/9500/8000 with IOS-XE 17.6+ for EVPN VXLAN. #}
+{# IOS-XE — eBGP underlay on /127 + eBGP EVPN on loopbacks, multihop. #}
 l2vpn evpn
  replication-type ingress
  router-id Loopback0
  default-gateway advertise enable
 
 router bgp {{ node.asn }}
- bgp router-id {{ (node.loopback_v6.compressed)[-7:-3] | replace(':', '.') }}
+ bgp router-id interface Loopback0
  bgp log-neighbor-changes
  no bgp default ipv4-unicast
  address-family ipv6 unicast
@@ -14,17 +13,15 @@ router bgp {{ node.asn }}
  address-family l2vpn evpn
   retain route-target all
 {% for p in peers %}
- neighbor peer-{{ p.local_iface | replace('/', '-') }} peer-group
- neighbor peer-{{ p.local_iface | replace('/', '-') }} remote-as {{ node_by_name[p.remote_node].asn }}
- neighbor peer-{{ p.local_iface | replace('/', '-') }} ebgp-multihop 2
- neighbor peer-{{ p.local_iface | replace('/', '-') }} update-source {{ p.local_iface }}
- {# Link-local neighbor: the operator must fill the remote LLA — or use a peer-discovery
-    script. In lab, derive LLA from MAC; here we emit a placeholder for the reconciler
-    to substitute via LLDP neighbor discovery. #}
- neighbor FE80::%{{ p.local_iface }} peer-group peer-{{ p.local_iface | replace('/', '-') }}
+ neighbor {{ p.remote_ipv6 }} remote-as {{ node_by_name[p.remote_node].asn }}
+ neighbor {{ p.remote_ipv6 }} description underlay to {{ p.remote_node }}
+ neighbor {{ node_by_name[p.remote_node].loopback_v6 }} remote-as {{ node_by_name[p.remote_node].asn }}
+ neighbor {{ node_by_name[p.remote_node].loopback_v6 }} description evpn to {{ p.remote_node }}
+ neighbor {{ node_by_name[p.remote_node].loopback_v6 }} ebgp-multihop 3
+ neighbor {{ node_by_name[p.remote_node].loopback_v6 }} update-source Loopback0
  address-family ipv6 unicast
-  neighbor FE80::%{{ p.local_iface }} activate
+  neighbor {{ p.remote_ipv6 }} activate
  address-family l2vpn evpn
-  neighbor FE80::%{{ p.local_iface }} activate
-  neighbor FE80::%{{ p.local_iface }} send-community both
+  neighbor {{ node_by_name[p.remote_node].loopback_v6 }} activate
+  neighbor {{ node_by_name[p.remote_node].loopback_v6 }} send-community both
 {% endfor %}

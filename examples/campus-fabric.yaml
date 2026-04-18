@@ -2,8 +2,12 @@ apiVersion: sdn.usg/v1
 kind: Fabric
 fabric:
   name: campus-01
-  underlay_prefix: "fd00:face:b00c::/48"
-  loopback_prefix: "fd00:face:b00c:10::/64"
+  underlay:
+    mode: numbered
+    link_pool: "fd00:face:b00c:1000::/56"
+    link_prefix_len: 127
+    loopback_pool: "fd00:face:b00c:10::/64"
+    loopback_prefix_len: 128
   isis_area: "49.0001"
   mtu: 9216
   nodes:

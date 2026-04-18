@@ -7,9 +7,9 @@ from __future__ import annotations
 
 from enum import StrEnum
 from ipaddress import IPv6Address, IPv6Interface, IPv6Network
-from typing import Annotated
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, computed_field, field_validator
 
 Name = Annotated[str, StringConstraints(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.:-]+$")]
 
@@ -28,13 +28,28 @@ class Node(BaseModel):
     role: NodeRole
     inventory_ref: Name = Field(description="Matches Device.name in inventory.")
     loopback_v6: IPv6Address = Field(
-        description="IPv6 loopback / router-id source. Also used as VTEP IP (synthesized from v6).",
+        description="IPv6 loopback (/128). Used as router-id and EVPN/VTEP source.",
     )
     isis_net: str = Field(
         pattern=r"^49\.[0-9a-f]{4}\.([0-9a-f]{4}\.){2}[0-9a-f]{4}\.00$",
         description="IS-IS NET (NSAP). Example: 49.0001.0000.0000.0001.00",
     )
-    asn: int = Field(ge=64512, le=65534, description="Private 16-bit ASN for BGP-unnumbered peering.")
+    asn: int = Field(ge=64512, le=65534, description="Private 16-bit ASN for BGP peering.")
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def router_id_v4(self) -> str:
+        """Synthetic IPv4 router-id derived from ASN.
+
+        Several NOSes (Junos, NX-OS, AOS-CX) insist on a dotted-quad router-id
+        even on v6-only underlays. We derive a stable placeholder from the ASN
+        (0.0.<hi>.<lo>) so the operator doesn't have to track a separate pool.
+        Operators who want explicit v4 router-ids can override by setting
+        ``Node.router_id_v4`` via a custom model extension.
+        """
+        hi = (self.asn >> 8) & 0xFF
+        lo = self.asn & 0xFF
+        return f"0.0.{hi}.{lo}"
 
 
 class Link(BaseModel):
@@ -46,6 +61,24 @@ class Link(BaseModel):
     b_iface: str
     mtu: int = 9216
     description: str | None = None
+
+
+class UnderlayConfig(BaseModel):
+    """Fabric underlay addressing + peering policy."""
+
+    model_config = ConfigDict(frozen=True)
+
+    mode: Literal["numbered", "unnumbered"] = Field(
+        default="numbered",
+        description="'numbered' uses IPv6 /127 p2p addresses; 'unnumbered' uses IPv6 LLA peering.",
+    )
+    link_pool: IPv6Network = Field(
+        default=IPv6Network("fd00:face:b00c:1000::/56"),
+        description="Pool from which /127 p2p link prefixes are allocated.",
+    )
+    link_prefix_len: int = Field(default=127, ge=64, le=127)
+    loopback_pool: IPv6Network = Field(default=IPv6Network("fd00:face:b00c:10::/64"))
+    loopback_prefix_len: int = Field(default=128, ge=64, le=128)
 
 
 class L2Vni(BaseModel):
@@ -104,24 +137,13 @@ class Tenant(BaseModel):
         default_factory=dict, description="Keyed by L2Vni.name."
     )
 
-    @field_validator("anycast_gateways")
-    @classmethod
-    def _validate_gw_refs(
-        cls, v: dict[str, AnycastGateway], info: object
-    ) -> dict[str, AnycastGateway]:
-        return v
-
 
 class Fabric(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     name: Name
-    underlay_prefix: IPv6Network = Field(
-        default=IPv6Network("fd00:face:b00c::/48"),
-        description="Informational; links use IPv6 link-local so no prefix is configured.",
-    )
-    loopback_prefix: IPv6Network = Field(default=IPv6Network("fd00:face:b00c:10::/64"))
-    isis_area: str = Field(default="49.0001", description="Derived area from NET.")
+    underlay: UnderlayConfig = Field(default_factory=UnderlayConfig)
+    isis_area: str = Field(default="49.0001", description="IS-IS area; should match Node.isis_net.")
     mtu: int = 9216
     nodes: list[Node]
     links: list[Link]

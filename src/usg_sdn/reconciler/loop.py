@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 
+from ..allocator import allocate_persistent
 from ..drivers import driver_for
 from ..logging import log
 from ..models.inventory import Device
@@ -36,16 +37,17 @@ async def reconcile_once() -> list[DriftReport]:
         if intent is None:
             log.warning("no intent document stored, skipping reconciliation")
             return reports
+        allocations = await allocate_persistent(intent.fabric, session)
         devices = await DeviceRepo(session).list()
         state_repo = StateRepo(session)
         for device in devices:
-            reports.append(await _reconcile_device(device, intent, state_repo))
+            reports.append(await _reconcile_device(device, intent, state_repo, allocations))
     return reports
 
 
-async def _reconcile_device(device: Device, intent, state_repo: StateRepo) -> DriftReport:
+async def _reconcile_device(device: Device, intent, state_repo: StateRepo, allocations) -> DriftReport:
     try:
-        bundle = render_device(intent, device)
+        bundle = render_device(intent, device, allocations=allocations)
     except Exception as e:
         await state_repo.set(device.name, DeviceStatus.ERROR, message=f"render failed: {e}")
         return DriftReport(device=device.name, status=DeviceStatus.ERROR, diff="", message=str(e))
@@ -76,7 +78,8 @@ async def push_device(device_name: str, *, finalize: bool = True, timeout_s: int
         intent = await IntentRepo(session).load()
         if intent is None:
             return PushResult(device=device_name, ok=False, message="no intent")
-        bundle = render_device(intent, device)
+        allocations = await allocate_persistent(intent.fabric, session)
+        bundle = render_device(intent, device, allocations=allocations)
         drv = driver_for(device)
         result = await drv.apply(bundle.config_text, timeout_s=timeout_s)
         if finalize and result.ok:

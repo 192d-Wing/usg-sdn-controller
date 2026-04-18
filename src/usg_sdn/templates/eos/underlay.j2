@@ -1,4 +1,4 @@
-{# Arista EOS — IS-IS L2 IPv6, BGP-unnumbered via "neighbor interface" #}
+{# Arista EOS — numbered IPv6 /127 p2p underlay + IS-IS L2 multi-topology. #}
 hostname {{ node.name }}
 !
 service routing protocols model multi-agent
@@ -6,7 +6,7 @@ service routing protocols model multi-agent
 ipv6 unicast-routing
 !
 interface Loopback0
-   description fabric loopback / VTEP
+   description fabric loopback
    ipv6 address {{ node.loopback_v6 }}/128
    isis enable FABRIC
    isis passive
@@ -17,6 +17,7 @@ interface {{ p.local_iface }}
    no switchport
    mtu {{ fabric.mtu }}
    ipv6 enable
+   ipv6 address {{ p.local_ipv6 }}/{{ p.prefix_len }}
    isis enable FABRIC
    isis network point-to-point
 !

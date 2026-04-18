@@ -8,6 +8,7 @@ from .intent import (
     Node,
     NodeRole,
     Tenant,
+    UnderlayConfig,
     Vrf,
 )
 from .inventory import Device, DeviceCredential, Vendor
@@ -28,6 +29,7 @@ __all__ = [
     "PushResult",
     "RenderBundle",
     "Tenant",
+    "UnderlayConfig",
     "Vendor",
     "Vrf",
 ]

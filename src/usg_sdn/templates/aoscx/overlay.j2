@@ -1,6 +1,6 @@
-{# AOS-CX EVPN overlay — eBGP IPv6 LLA peers + l2vpn evpn #}
+{# AOS-CX — eBGP underlay on /127s + eBGP EVPN on loopbacks, multihop. #}
 router bgp {{ node.asn }}
-    router-id {{ (node.loopback_v6.compressed)[-7:-3] | replace(':', '.') }}
+    router-id {{ node.router_id_v4 }}
     bgp log-neighbor-changes
     maximum-paths 8
     address-family ipv6 unicast
@@ -9,14 +9,18 @@ router bgp {{ node.asn }}
         retain route-target all
     exit-address-family
 {% for p in peers %}
-    neighbor {{ p.local_iface }} interface remote-as external
-    neighbor {{ p.local_iface }} interface description "{{ p.description }}"
+    neighbor {{ p.remote_ipv6 }} remote-as {{ node_by_name[p.remote_node].asn }}
+    neighbor {{ p.remote_ipv6 }} description "underlay to {{ p.remote_node }}"
+    neighbor {{ node_by_name[p.remote_node].loopback_v6 }} remote-as {{ node_by_name[p.remote_node].asn }}
+    neighbor {{ node_by_name[p.remote_node].loopback_v6 }} description "evpn to {{ p.remote_node }}"
+    neighbor {{ node_by_name[p.remote_node].loopback_v6 }} update-source loopback0
+    neighbor {{ node_by_name[p.remote_node].loopback_v6 }} ebgp-multihop 3
     address-family ipv6 unicast
-        neighbor {{ p.local_iface }} interface activate
+        neighbor {{ p.remote_ipv6 }} activate
     exit-address-family
     address-family l2vpn evpn
-        neighbor {{ p.local_iface }} interface activate
-        neighbor {{ p.local_iface }} interface send-community extended
+        neighbor {{ node_by_name[p.remote_node].loopback_v6 }} activate
+        neighbor {{ node_by_name[p.remote_node].loopback_v6 }} send-community extended
     exit-address-family
 {% endfor %}
 !

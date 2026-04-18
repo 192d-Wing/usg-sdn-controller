@@ -1,6 +1,4 @@
-{# Cisco IOS-XE (Catalyst 9k / 8k) — IS-IS L2 IPv6, BGP with IPv6 link-local neighbors.
-   IOS-XE does not have a true "neighbor <iface> remote-as external" syntax
-   as in NX-OS; we configure explicit link-local neighbors keyed by interface. #}
+{# Cisco IOS-XE — numbered IPv6 /127 p2p underlay + IS-IS L2 multi-topology. #}
 hostname {{ node.name }}
 ipv6 unicast-routing
 no ip domain lookup
@@ -15,7 +13,7 @@ router isis FABRIC
  exit-address-family
 
 interface Loopback0
- description fabric loopback / VTEP
+ description fabric loopback
  ipv6 address {{ node.loopback_v6 }}/128
  ipv6 enable
  ipv6 router isis FABRIC
@@ -25,6 +23,7 @@ interface {{ p.local_iface }}
  description {{ p.description }}
  no switchport
  mtu {{ fabric.mtu }}
+ ipv6 address {{ p.local_ipv6 }}/{{ p.prefix_len }}
  ipv6 enable
  isis network point-to-point
  ipv6 router isis FABRIC

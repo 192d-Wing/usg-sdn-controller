@@ -33,3 +33,18 @@ class DeviceStateRow(Base, TimestampMixin):
     running_config_hash: Mapped[str | None] = mapped_column(String(64))
     message: Mapped[str | None] = mapped_column(Text)
     rendered_config: Mapped[str | None] = mapped_column(Text)
+
+
+class LinkAddressRow(Base, TimestampMixin):
+    """Persistent /127 allocation for a fabric link.
+
+    ``link_key`` is ``"{lo_node}:{lo_iface}|{hi_node}:{hi_iface}"`` in canonical
+    lexicographic order — independent of how the operator wrote the Link.
+    """
+
+    __tablename__ = "link_address"
+
+    link_key: Mapped[str] = mapped_column(String(256), primary_key=True)
+    subnet: Mapped[str] = mapped_column(String(64), nullable=False)
+    a_addr: Mapped[str] = mapped_column(String(64), nullable=False)
+    b_addr: Mapped[str] = mapped_column(String(64), nullable=False)

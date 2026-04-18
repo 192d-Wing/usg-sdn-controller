@@ -5,7 +5,7 @@ routing-instances {
     {{ t.name }}-{{ vrf.name }} {
         instance-type vrf;
         interface irb.{{ vrf.l3_vni }};
-        route-distinguisher {{ node.loopback_v6.compressed }}:{{ vrf.l3_vni }};
+        route-distinguisher {{ node.router_id_v4 }}:{{ vrf.l3_vni }};
         vrf-target target:{{ node.asn }}:{{ vrf.l3_vni }};
         protocols {
             evpn {

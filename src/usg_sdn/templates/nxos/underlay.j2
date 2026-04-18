@@ -1,4 +1,4 @@
-{# Cisco NX-OS — IPv6-only underlay: IS-IS L2, BGP-unnumbered (neighbor <iface>) #}
+{# Cisco NX-OS — numbered IPv6 /127 p2p underlay + IS-IS L2. #}
 hostname {{ node.name }}
 feature isis
 feature bgp
@@ -7,7 +7,7 @@ feature vn-segment-vlan-based
 nv overlay evpn
 
 interface loopback0
-  description fabric loopback / VTEP
+  description fabric loopback
   ipv6 address {{ node.loopback_v6 }}/128
   ip router isis FABRIC
 
@@ -23,8 +23,7 @@ interface {{ p.local_iface }}
   description {{ p.description }}
   no switchport
   mtu {{ fabric.mtu }}
-  ipv6 address use-link-local-only
-  ipv6 nd ra-interval 4 min 3
+  ipv6 address {{ p.local_ipv6 }}/{{ p.prefix_len }}
   ip router isis FABRIC
   isis network point-to-point
   no shutdown

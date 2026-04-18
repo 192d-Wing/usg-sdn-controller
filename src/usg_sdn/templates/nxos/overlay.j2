@@ -1,17 +1,22 @@
-{# NX-OS EVPN overlay — eBGP unnumbered with L2VPN EVPN AF #}
+{# NX-OS — eBGP underlay + eBGP EVPN (over loopbacks, multihop). #}
 route-map ALLOW-ALL permit 10
 
 router bgp {{ node.asn }}
-  router-id {{ (node.loopback_v6.compressed[-4:]) if false else '10.0.0.1' }}
+  router-id {{ node.router_id_v4 }}
   address-family ipv6 unicast
     redistribute direct route-map ALLOW-ALL
   address-family l2vpn evpn
     retain route-target all
 {% for p in peers %}
-  neighbor {{ p.local_iface }}
-    remote-as external
-    description {{ p.description }}
+  neighbor {{ p.remote_ipv6 }}
+    remote-as {{ node_by_name[p.remote_node].asn }}
+    description underlay to {{ p.remote_node }} ({{ p.remote_iface }})
     address-family ipv6 unicast
+  neighbor {{ node_by_name[p.remote_node].loopback_v6 }}
+    remote-as {{ node_by_name[p.remote_node].asn }}
+    description evpn to {{ p.remote_node }}
+    update-source loopback0
+    ebgp-multihop 3
     address-family l2vpn evpn
       send-community extended
 {% endfor %}

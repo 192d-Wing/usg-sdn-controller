@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ...allocator import allocate_persistent
 from ...reconciler import reconcile_once
 from ...reconciler.loop import push_device
 from ...render import config_diff, render_device
@@ -30,7 +31,8 @@ async def render(
     intent = await IntentRepo(session).load()
     if intent is None:
         raise HTTPException(status.HTTP_409_CONFLICT, "no intent stored")
-    bundle = render_device(intent, device)
+    allocations = await allocate_persistent(intent.fabric, session)
+    bundle = render_device(intent, device, allocations=allocations)
     return RenderResponse(device=bundle.device, vendor=bundle.vendor, config_text=bundle.config_text)
 
 
@@ -53,7 +55,8 @@ async def diff(
     intent = await IntentRepo(session).load()
     if intent is None:
         raise HTTPException(status.HTTP_409_CONFLICT, "no intent stored")
-    bundle = render_device(intent, device)
+    allocations = await allocate_persistent(intent.fabric, session)
+    bundle = render_device(intent, device, allocations=allocations)
     running = await driver_for(device).fetch_running()
     d = config_diff(running, bundle.config_text)
     return DiffResponse(device=device_name, drift=bool(d), diff=d)

@@ -2,9 +2,12 @@
 
 Multi-vendor SDN controller for **Campus EVPN** fabrics.
 
-- **Underlay:** IPv6-only, BGP-unnumbered (IPv6 link-local peering), IS-IS L2 as IGP
-- **Overlay:** EVPN (AFI/SAFI 25/70) with VXLAN data-plane, **symmetric IRB**,
-  **distributed anycast gateway**
+- **Underlay:** IPv6-only, **numbered** with /127 p2p links + /128 loopbacks,
+  IS-IS L2 multi-topology as IGP. (BGP-unnumbered mode is still wired in the
+  intent schema for NOSes that support it, but the default and the rendered
+  templates assume numbered.)
+- **Overlay:** eBGP EVPN (AFI/SAFI 25/70) on loopbacks with `ebgp-multihop 3`;
+  VXLAN data-plane, **symmetric IRB**, **distributed anycast gateway**
 - **Vendors:** Juniper Junos (EX/QFX), Cisco NX-OS, Cisco IOS-XE, Arista EOS, Aruba AOS-CX 10.x
 - **Transport:** NETCONF/SSH everywhere it's supported; AOS-CX uses REST (`pyaoscx`)
 
@@ -54,17 +57,25 @@ sdnctl diff --device spine1
 sdnctl push --device spine1 --confirm
 ```
 
-## Vendor BGP-unnumbered support matrix
+## Addressing
 
-| Vendor / OS   | Native IPv6 LLA peering     | Notes |
-|---------------|-----------------------------|-------|
-| Cisco NX-OS   | ✅ `neighbor <iface>`       | 9.3(3)+ for EVPN |
-| Arista EOS    | ✅ `neighbor <iface>`       | 4.27+ |
-| Aruba AOS-CX  | ✅ `neighbor <lla>%<iface>` | 10.10+ |
-| Juniper Junos | ⚠️ via dynamic-neighbors `allow fe80::/10` + `type external` (IPv6 LLA peering without /127) |
-| Cisco IOS-XE  | ⚠️ requires IPv6 link-local neighbor + `ipv6 enable` on the interface |
+Every fabric link gets a /127 allocated from `fabric.underlay.link_pool`
+(default `fd00:face:b00c:1000::/56`). Allocation is deterministic by
+canonical link key (sorted endpoints) and is persisted to the `link_address`
+table once the controller has a DB session, so re-ordering the intent
+or adding a new link doesn't renumber existing links.
 
-The Junos and IOS-XE templates handle this via dynamic neighbors / explicit LLA neighbors; see comments inline.
+Loopbacks are operator-assigned on each `Node` (`loopback_v6`, typed as
+`IPv6Address`, rendered as `/128`). A synthetic IPv4 router-id is derived
+from the ASN for NOSes that insist on a dotted-quad (`Node.router_id_v4`).
+
+## Why numbered instead of BGP-unnumbered
+
+Numbered gives uniform behaviour across all five NOSes — no vendor-specific
+workarounds for Junos (`dynamic-neighbor`) or IOS-XE (no `neighbor <iface>`
+form). Trade-off: loss of ND-driven self-healing on cable swaps, and /127
+bookkeeping the controller owns. For campus fabrics this is almost always
+the right call.
 
 ## Safety
 
