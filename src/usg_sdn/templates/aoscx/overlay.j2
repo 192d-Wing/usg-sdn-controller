@@ -23,7 +23,9 @@ router bgp {{ node.asn }}
         neighbor {{ node_by_name[p.remote_node].loopback_v6 }} send-community extended
     exit-address-family
 {% endfor %}
+{% if node.is_vtep %}
 !
 overlay
     source-interface loopback0
     encapsulation vxlan
+{% endif %}

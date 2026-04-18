@@ -11,11 +11,17 @@ from usg_sdn.models.inventory import Device, DeviceCredential, Vendor
 
 ROOT = Path(__file__).resolve().parents[1]
 EXAMPLE_INTENT = ROOT / "examples" / "campus-fabric.yaml"
+EXAMPLE_3TIER = ROOT / "examples" / "campus-fabric-3tier.yaml"
 
 
 @pytest.fixture
 def intent() -> IntentDocument:
     return IntentDocument.model_validate(yaml.safe_load(EXAMPLE_INTENT.read_text()))
+
+
+@pytest.fixture
+def intent_3tier() -> IntentDocument:
+    return IntentDocument.model_validate(yaml.safe_load(EXAMPLE_3TIER.read_text()))
 
 
 def _device(name: str, vendor: Vendor) -> Device:

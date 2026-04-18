@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     reconcile_interval_sec: int = 60
     reconcile_enabled: bool = True
 
+    link_pool_warn_threshold: float = 0.75
+    link_pool_gc: bool = True
+
     device_ssh_user: str = "sdn"
     device_ssh_key: Path = Field(default=Path("~/.ssh/id_ed25519"))
     device_ssh_timeout_sec: int = 30

@@ -1,4 +1,6 @@
-{# AOS-CX tenant: VRF, L3VNI, L2VNI, distributed anycast GW (active-gateway) #}
+{# AOS-CX tenant: VRF, L3VNI, L2VNI, distributed anycast GW (active-gateway).
+   Only emitted on VTEP nodes. #}
+{% if node.is_vtep %}
 {% for t in tenants %}
 {% for vrf in t.vrfs %}
 vrf {{ t.name }}-{{ vrf.name }}
@@ -50,3 +52,4 @@ evpn
 !
 {% endfor %}
 {% endfor %}
+{% endif %}

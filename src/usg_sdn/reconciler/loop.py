@@ -13,7 +13,8 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 
-from ..allocator import allocate_persistent
+from ..allocator import allocate_persistent, pool_stats
+from ..config import settings
 from ..drivers import driver_for
 from ..logging import log
 from ..models.inventory import Device
@@ -37,7 +38,19 @@ async def reconcile_once() -> list[DriftReport]:
         if intent is None:
             log.warning("no intent document stored, skipping reconciliation")
             return reports
-        allocations = await allocate_persistent(intent.fabric, session)
+        allocations = await allocate_persistent(
+            intent.fabric,
+            session,
+            gc=settings.link_pool_gc,
+            warn_threshold=settings.link_pool_warn_threshold,
+        )
+        stats = pool_stats(intent.fabric, allocations)
+        log.info(
+            "link-pool-status",
+            used=stats.used_slots,
+            total=stats.total_slots,
+            utilization=round(stats.utilization, 4),
+        )
         devices = await DeviceRepo(session).list()
         state_repo = StateRepo(session)
         for device in devices:
@@ -78,7 +91,12 @@ async def push_device(device_name: str, *, finalize: bool = True, timeout_s: int
         intent = await IntentRepo(session).load()
         if intent is None:
             return PushResult(device=device_name, ok=False, message="no intent")
-        allocations = await allocate_persistent(intent.fabric, session)
+        allocations = await allocate_persistent(
+            intent.fabric,
+            session,
+            gc=settings.link_pool_gc,
+            warn_threshold=settings.link_pool_warn_threshold,
+        )
         bundle = render_device(intent, device, allocations=allocations)
         drv = driver_for(device)
         result = await drv.apply(bundle.config_text, timeout_s=timeout_s)

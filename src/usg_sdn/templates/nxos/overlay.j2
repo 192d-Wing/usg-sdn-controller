@@ -21,9 +21,11 @@ router bgp {{ node.asn }}
       send-community extended
 {% endfor %}
 
+{% if node.is_vtep %}
 interface nve1
   no shutdown
   host-reachability protocol bgp
   source-interface loopback0
   global ingress-replication protocol bgp
   global suppress-arp
+{% endif %}

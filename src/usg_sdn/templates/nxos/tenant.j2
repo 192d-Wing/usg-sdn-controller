@@ -1,4 +1,6 @@
-{# NX-OS tenant: VRF + L3VNI + L2VNIs with anycast-gateway IRB SVIs #}
+{# NX-OS tenant: VRF + L3VNI + L2VNIs with anycast-gateway IRB SVIs.
+   Only emitted on VTEP nodes. #}
+{% if node.is_vtep %}
 fabric forwarding anycast-gateway-mac 0000.5e00.01fe
 
 {% for t in tenants %}
@@ -69,3 +71,4 @@ evpn
 
 {% endfor %}
 {% endfor %}
+{% endif %}

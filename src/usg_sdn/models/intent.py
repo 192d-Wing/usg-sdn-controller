@@ -15,10 +15,16 @@ Name = Annotated[str, StringConstraints(min_length=1, max_length=64, pattern=r"^
 
 
 class NodeRole(StrEnum):
+    SUPER_SPINE = "super-spine"
     SPINE = "spine"
     LEAF = "leaf"
     BORDER_LEAF = "border-leaf"
     SERVICE_LEAF = "service-leaf"
+
+
+_VTEP_ROLES: frozenset[NodeRole] = frozenset(
+    {NodeRole.LEAF, NodeRole.BORDER_LEAF, NodeRole.SERVICE_LEAF}
+)
 
 
 class Node(BaseModel):
@@ -35,6 +41,17 @@ class Node(BaseModel):
         description="IS-IS NET (NSAP). Example: 49.0001.0000.0000.0001.00",
     )
     asn: int = Field(ge=64512, le=65534, description="Private 16-bit ASN for BGP peering.")
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def is_vtep(self) -> bool:
+        """True for roles that originate VXLAN VTEPs / EVPN VNIs.
+
+        Spines and super-spines are pure eBGP EVPN transit: they carry
+        EVPN routes but don't need VXLAN interface config or tenant VNI
+        state locally.
+        """
+        return self.role in _VTEP_ROLES
 
     @computed_field  # type: ignore[prop-decorator]
     @property

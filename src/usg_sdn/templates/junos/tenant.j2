@@ -1,4 +1,6 @@
-{# Junos tenant/VRF + L2 + L3 VNI (symmetric IRB, distributed anycast GW) #}
+{# Junos tenant/VRF + L2 + L3 VNI (symmetric IRB, distributed anycast GW).
+   Only emitted on VTEP nodes. #}
+{% if node.is_vtep %}
 {% for t in tenants %}
 {% for vrf in t.vrfs %}
 routing-instances {
@@ -56,3 +58,4 @@ interfaces {
 {% endif %}
 {% endfor %}
 {% endfor %}
+{% endif %}

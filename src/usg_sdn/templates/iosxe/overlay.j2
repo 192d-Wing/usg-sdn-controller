@@ -1,8 +1,10 @@
 {# IOS-XE — eBGP underlay on /127 + eBGP EVPN on loopbacks, multihop. #}
+{% if node.is_vtep %}
 l2vpn evpn
  replication-type ingress
  router-id Loopback0
  default-gateway advertise enable
+{% endif %}
 
 router bgp {{ node.asn }}
  bgp router-id interface Loopback0

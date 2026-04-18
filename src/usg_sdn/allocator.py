@@ -91,17 +91,59 @@ def _subnet_to_allocation(
     return LinkAllocation(link_key=key, subnet=subnet, a_addr=a, b_addr=b)
 
 
+@dataclass(frozen=True)
+class PoolStats:
+    """Link-pool utilisation snapshot."""
+
+    pool: str
+    prefix_len: int
+    total_slots: int
+    used_slots: int
+
+    @property
+    def utilization(self) -> float:
+        return self.used_slots / self.total_slots if self.total_slots else 0.0
+
+    @property
+    def free_slots(self) -> int:
+        return self.total_slots - self.used_slots
+
+
+def pool_stats(fabric: Fabric, allocations: dict[tuple[str, str], LinkAllocation]) -> PoolStats:
+    cfg = fabric.underlay
+    total = 1 << (cfg.link_prefix_len - cfg.link_pool.prefixlen)
+    return PoolStats(
+        pool=str(cfg.link_pool),
+        prefix_len=cfg.link_prefix_len,
+        total_slots=total,
+        used_slots=len(allocations),
+    )
+
+
 async def allocate_persistent(
-    fabric: Fabric, session
+    fabric: Fabric,
+    session,
+    *,
+    gc: bool = True,
+    warn_threshold: float = 0.75,
 ) -> dict[tuple[str, str], LinkAllocation]:
     """Persistent, idempotent allocator backed by ``link_address`` rows.
 
-    On the first call for a link key, consumes the next free /127 from the
-    pool that isn't already taken by another row and stores it. On subsequent
-    calls, returns the stored allocation unchanged.
+    * Existing allocations for links that are still present are reused verbatim.
+    * New links consume the next free /127 from the pool.
+    * When ``gc=True`` (default), rows whose ``link_key`` is no longer in the
+      fabric are deleted so the pool can be reused for tight-pool deployments.
+    * When utilisation crosses ``warn_threshold`` (default 0.75), a structured
+      warning is logged. Callers can still surface the same data via
+      ``pool_stats()``.
+
+    Note: ``link_key`` is globally unique across nodes only if node names are
+    unique across fabrics. Multi-fabric deployments should add a ``fabric_id``
+    column before enabling GC.
     """
     from sqlalchemy import select
 
+    from .logging import log
     from .store.models_sql import LinkAddressRow
 
     cfg: UnderlayConfig = fabric.underlay
@@ -110,14 +152,29 @@ async def allocate_persistent(
 
     rows = (await session.execute(select(LinkAddressRow))).scalars().all()
     existing: dict[str, LinkAddressRow] = {r.link_key: r for r in rows}
-    used_subnets: set[str] = {r.subnet for r in rows}
 
     def _key_str(key: tuple[str, str]) -> str:
         return f"{key[0]}|{key[1]}"
 
-    out: dict[tuple[str, str], LinkAllocation] = {}
-    new_rows: list[LinkAddressRow] = []
+    wanted: set[str] = {_key_str(canonical_key(link)) for link in fabric.links}
 
+    # GC stale rows first so their /127s become available for new links.
+    reclaimed: list[LinkAddressRow] = []
+    if gc:
+        for ks, row in list(existing.items()):
+            if ks not in wanted:
+                reclaimed.append(row)
+                del existing[ks]
+        for row in reclaimed:
+            await session.delete(row)
+        if reclaimed:
+            log.info(
+                "link-pool-gc",
+                reclaimed=len(reclaimed),
+                keys=[r.link_key for r in reclaimed],
+            )
+
+    used_subnets: set[str] = {r.subnet for r in existing.values()}
     subnet_iter = _iter_p127_subnets(cfg.link_pool, cfg.link_prefix_len)
 
     def _next_free() -> IPv6Network:
@@ -127,6 +184,8 @@ async def allocate_persistent(
                 return subnet
         raise RuntimeError("link_pool exhausted")
 
+    out: dict[tuple[str, str], LinkAllocation] = {}
+    new_rows: list[LinkAddressRow] = []
     for link in fabric.links:
         key = canonical_key(link)
         ks = _key_str(key)
@@ -153,5 +212,17 @@ async def allocate_persistent(
 
     if new_rows:
         session.add_all(new_rows)
+    if new_rows or reclaimed:
         await session.commit()
+
+    stats = pool_stats(fabric, out)
+    if stats.utilization >= warn_threshold:
+        log.warning(
+            "link-pool-high-utilization",
+            pool=stats.pool,
+            used=stats.used_slots,
+            total=stats.total_slots,
+            utilization=round(stats.utilization, 4),
+            threshold=warn_threshold,
+        )
     return out

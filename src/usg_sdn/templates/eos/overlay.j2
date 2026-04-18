@@ -25,7 +25,9 @@ router bgp {{ node.asn }}
    !
    address-family evpn
       neighbor EVPN activate
+{% if node.is_vtep %}
 !
 interface Vxlan1
    vxlan source-interface Loopback0
    vxlan udp-port 4789
+{% endif %}

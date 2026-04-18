@@ -1,4 +1,7 @@
-{# Arista EOS tenant — symmetric IRB, anycast GW with "ip virtual-router" #}
+{# Arista EOS tenant — symmetric IRB, anycast GW with "ip virtual-router".
+   Only emitted on VTEP nodes; spines/super-spines transit EVPN but carry
+   no tenant state locally. #}
+{% if node.is_vtep %}
 ip virtual-router mac-address {{ (tenants[0].anycast_gateways | first | default('00:00:5e:00:01:fe')) if false else '00:00:5e:00:01:fe' }}
 !
 {% for t in tenants %}
@@ -57,3 +60,4 @@ router bgp {{ node.asn }}
 !
 {% endfor %}
 {% endfor %}
+{% endif %}

@@ -56,8 +56,10 @@ protocols {
         default-gateway no-gateway-community;
     }
 }
+{% if node.is_vtep %}
 switch-options {
     vtep-source-interface lo0.0;
     route-distinguisher {{ node.router_id_v4 }}:1;
     vrf-target target:{{ node.asn }}:0;
 }
+{% endif %}

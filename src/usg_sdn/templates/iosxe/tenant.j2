@@ -1,4 +1,6 @@
-{# IOS-XE tenant: VRF + L3VNI + L2VNI with distributed anycast GW #}
+{# IOS-XE tenant: VRF + L3VNI + L2VNI with distributed anycast GW.
+   Only emitted on VTEP nodes. #}
+{% if node.is_vtep %}
 {% for t in tenants %}
 {% for vrf in t.vrfs %}
 vrf definition {{ t.name }}-{{ vrf.name }}
@@ -52,3 +54,4 @@ interface Vlan{{ l2.vlan_id }}
 {% endif %}
 {% endfor %}
 {% endfor %}
+{% endif %}

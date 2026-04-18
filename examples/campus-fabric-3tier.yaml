@@ -1,0 +1,49 @@
+# 3-tier campus EVPN fabric: leaves ↔ spines ↔ super-spines.
+# Demonstrates NodeRole.SUPER_SPINE. Spines and super-spines are pure
+# eBGP-EVPN transit: they carry EVPN routes but don't run VTEPs locally.
+apiVersion: sdn.usg/v1
+kind: Fabric
+fabric:
+  name: campus-3tier
+  underlay:
+    mode: numbered
+    # Deliberately-tight pool to demonstrate the 75% utilisation alarm:
+    # /120 with /127 p2p leaves 128 link slots total.
+    link_pool: "fd00:face:b00c:2000::/120"
+    link_prefix_len: 127
+    loopback_pool: "fd00:face:b00c:20::/64"
+    loopback_prefix_len: 128
+  isis_area: "49.0001"
+  mtu: 9216
+  nodes:
+    # Super-spines (transit)
+    - { name: ssp1, role: super-spine, inventory_ref: ssp1, loopback_v6: "fd00:face:b00c:20::101", isis_net: "49.0001.0000.0000.0101.00", asn: 65101 }
+    - { name: ssp2, role: super-spine, inventory_ref: ssp2, loopback_v6: "fd00:face:b00c:20::102", isis_net: "49.0001.0000.0000.0102.00", asn: 65102 }
+    # Spines (transit)
+    - { name: sp1,  role: spine,       inventory_ref: sp1,  loopback_v6: "fd00:face:b00c:20::1",   isis_net: "49.0001.0000.0000.0001.00", asn: 65001 }
+    - { name: sp2,  role: spine,       inventory_ref: sp2,  loopback_v6: "fd00:face:b00c:20::2",   isis_net: "49.0001.0000.0000.0002.00", asn: 65002 }
+    # Leaves (VTEPs)
+    - { name: lf1,  role: leaf,        inventory_ref: lf1,  loopback_v6: "fd00:face:b00c:20::11",  isis_net: "49.0001.0000.0000.0011.00", asn: 65011 }
+    - { name: lf2,  role: leaf,        inventory_ref: lf2,  loopback_v6: "fd00:face:b00c:20::12",  isis_net: "49.0001.0000.0000.0012.00", asn: 65012 }
+  links:
+    # leaf ↔ spine
+    - { a_node: lf1, a_iface: Ethernet1, b_node: sp1, b_iface: Ethernet1 }
+    - { a_node: lf1, a_iface: Ethernet2, b_node: sp2, b_iface: Ethernet1 }
+    - { a_node: lf2, a_iface: Ethernet1, b_node: sp1, b_iface: Ethernet2 }
+    - { a_node: lf2, a_iface: Ethernet2, b_node: sp2, b_iface: Ethernet2 }
+    # spine ↔ super-spine
+    - { a_node: sp1, a_iface: Ethernet48, b_node: ssp1, b_iface: Ethernet1 }
+    - { a_node: sp1, a_iface: Ethernet47, b_node: ssp2, b_iface: Ethernet1 }
+    - { a_node: sp2, a_iface: Ethernet48, b_node: ssp1, b_iface: Ethernet2 }
+    - { a_node: sp2, a_iface: Ethernet47, b_node: ssp2, b_iface: Ethernet2 }
+
+tenants:
+  - name: corp
+    vrfs:
+      - { name: prod, l3_vni: 50001, l2_vnis: [users] }
+    l2_vnis:
+      - { name: users, vni: 10100, vlan_id: 100 }
+    l3_vnis:
+      - { name: prod-l3, vni: 50001, vrf: prod }
+    anycast_gateways:
+      users: { v6_gateway: "2001:db8:100::1/64", v4_gateway: "10.100.0.1/24" }

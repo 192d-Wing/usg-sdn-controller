@@ -5,7 +5,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...allocator import allocate_persistent
+from ...allocator import allocate_persistent, pool_stats
+from ...config import settings
 from ...reconciler import reconcile_once
 from ...reconciler.loop import push_device
 from ...render import config_diff, render_device
@@ -77,6 +78,41 @@ async def push(
     if not result.ok:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, result.message)
     return result.model_dump(mode="json")
+
+
+class PoolStatusResponse(BaseModel):
+    pool: str
+    prefix_len: int
+    used: int
+    total: int
+    free: int
+    utilization: float
+    threshold: float
+    alarm: bool
+
+
+@router.get("/pool-status", response_model=PoolStatusResponse)
+async def pool_status(session: AsyncSession = Depends(get_session)) -> PoolStatusResponse:
+    intent = await IntentRepo(session).load()
+    if intent is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "no intent stored")
+    allocations = await allocate_persistent(
+        intent.fabric,
+        session,
+        gc=settings.link_pool_gc,
+        warn_threshold=settings.link_pool_warn_threshold,
+    )
+    stats = pool_stats(intent.fabric, allocations)
+    return PoolStatusResponse(
+        pool=stats.pool,
+        prefix_len=stats.prefix_len,
+        used=stats.used_slots,
+        total=stats.total_slots,
+        free=stats.free_slots,
+        utilization=round(stats.utilization, 6),
+        threshold=settings.link_pool_warn_threshold,
+        alarm=stats.utilization >= settings.link_pool_warn_threshold,
+    )
 
 
 @router.post("/reconcile")
