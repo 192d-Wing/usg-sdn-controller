@@ -1,0 +1,29 @@
+{# Aruba AOS-CX 10.x — IS-IS L2 IPv6, BGP with IPv6 link-local neighbors
+   (AOS-CX 10.10+ supports "neighbor <lla>%<iface> remote-as <asn>" style). #}
+hostname {{ node.name }}
+!
+router isis
+    area-id {{ fabric.isis_area }}
+    system-id {{ node.isis_net.split('.')[1:-1] | join('.') }}
+    is-type level-2
+    address-family ipv6 unicast
+        multi-topology
+!
+interface loopback 0
+    description fabric loopback / VTEP
+    ipv6 address {{ node.loopback_v6 }}/128
+    ip router isis
+!
+{% for p in peers %}
+interface {{ p.local_iface }}
+    description {{ p.description }}
+    no shutdown
+    routing
+    mtu {{ fabric.mtu }}
+    ipv6 address link-local
+    ipv6 nd ra max-interval 4
+    ipv6 nd ra min-interval 3
+    ip router isis
+    isis network point-to-point
+!
+{% endfor %}

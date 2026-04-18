@@ -1,0 +1,21 @@
+# Example inventory for `sdnctl render --inventory examples/inventory.yaml ...`
+- name: spine1
+  vendor: eos
+  mgmt_address: "fd00:face:b00c:ffff::1"
+  credential: { username: sdn }
+- name: spine2
+  vendor: nxos
+  mgmt_address: "fd00:face:b00c:ffff::2"
+  credential: { username: sdn }
+- name: leaf1
+  vendor: junos
+  mgmt_address: "fd00:face:b00c:ffff::11"
+  credential: { username: sdn }
+- name: leaf2
+  vendor: aoscx
+  mgmt_address: "fd00:face:b00c:ffff::12"
+  credential: { username: admin, password: changeme }
+- name: border1
+  vendor: iosxe
+  mgmt_address: "fd00:face:b00c:ffff::21"
+  credential: { username: sdn }

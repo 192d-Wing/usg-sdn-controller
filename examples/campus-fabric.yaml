@@ -1,0 +1,59 @@
+apiVersion: sdn.usg/v1
+kind: Fabric
+fabric:
+  name: campus-01
+  underlay_prefix: "fd00:face:b00c::/48"
+  loopback_prefix: "fd00:face:b00c:10::/64"
+  isis_area: "49.0001"
+  mtu: 9216
+  nodes:
+    - name: spine1
+      role: spine
+      inventory_ref: spine1
+      loopback_v6: "fd00:face:b00c:10::1"
+      isis_net: "49.0001.0000.0000.0001.00"
+      asn: 65001
+    - name: spine2
+      role: spine
+      inventory_ref: spine2
+      loopback_v6: "fd00:face:b00c:10::2"
+      isis_net: "49.0001.0000.0000.0002.00"
+      asn: 65002
+    - name: leaf1
+      role: leaf
+      inventory_ref: leaf1
+      loopback_v6: "fd00:face:b00c:10::11"
+      isis_net: "49.0001.0000.0000.0011.00"
+      asn: 65011
+    - name: leaf2
+      role: leaf
+      inventory_ref: leaf2
+      loopback_v6: "fd00:face:b00c:10::12"
+      isis_net: "49.0001.0000.0000.0012.00"
+      asn: 65012
+    - name: border1
+      role: border-leaf
+      inventory_ref: border1
+      loopback_v6: "fd00:face:b00c:10::21"
+      isis_net: "49.0001.0000.0000.0021.00"
+      asn: 65021
+  links:
+    - { a_node: leaf1,   a_iface: Ethernet1, b_node: spine1, b_iface: Ethernet1 }
+    - { a_node: leaf1,   a_iface: Ethernet2, b_node: spine2, b_iface: Ethernet1 }
+    - { a_node: leaf2,   a_iface: Ethernet1, b_node: spine1, b_iface: Ethernet2 }
+    - { a_node: leaf2,   a_iface: Ethernet2, b_node: spine2, b_iface: Ethernet2 }
+    - { a_node: border1, a_iface: Ethernet1, b_node: spine1, b_iface: Ethernet3 }
+    - { a_node: border1, a_iface: Ethernet2, b_node: spine2, b_iface: Ethernet3 }
+
+tenants:
+  - name: corp
+    vrfs:
+      - { name: prod,  l3_vni: 50001, l2_vnis: [users, voice] }
+    l2_vnis:
+      - { name: users, vni: 10100, vlan_id: 100 }
+      - { name: voice, vni: 10200, vlan_id: 200 }
+    l3_vnis:
+      - { name: prod-l3, vni: 50001, vrf: prod }
+    anycast_gateways:
+      users: { v6_gateway: "2001:db8:100::1/64", v4_gateway: "10.100.0.1/24" }
+      voice: { v6_gateway: "2001:db8:200::1/64", v4_gateway: "10.200.0.1/24" }

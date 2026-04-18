@@ -1,0 +1,72 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "usg-sdn-controller"
+version = "0.1.0"
+description = "Multi-vendor SDN controller for Campus EVPN (IPv6 underlay, BGP-unnumbered, IS-IS)"
+readme = "README.md"
+requires-python = ">=3.14"
+license = "Apache-2.0"
+authors = [{ name = "192d Wing" }]
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.32",
+  "pydantic>=2.9",
+  "pydantic-settings>=2.6",
+  "sqlalchemy[asyncio]>=2.0",
+  "aiosqlite>=0.20",
+  "asyncpg>=0.30",
+  "alembic>=1.14",
+  "jinja2>=3.1",
+  "pyyaml>=6.0",
+  "scrapli>=2024.7.30",
+  "scrapli-netconf>=2024.7.30",
+  "scrapli-community>=2024.7.30",
+  "ncclient>=0.6.15",
+  "pyaoscx>=2.5",
+  "pygnmi>=0.8",
+  "typer>=0.12",
+  "rich>=13.9",
+  "httpx>=0.28",
+  "structlog>=24.4",
+  "tenacity>=9.0",
+  "deepdiff>=8.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3",
+  "pytest-asyncio>=0.24",
+  "pytest-cov>=6.0",
+  "ruff>=0.8",
+  "mypy>=1.13",
+  "types-PyYAML",
+]
+
+[project.scripts]
+sdnctl = "usg_sdn.cli.sdnctl:app"
+usg-sdn = "usg_sdn.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/usg_sdn"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/usg_sdn/templates" = "usg_sdn/templates"
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

@@ -1,0 +1,25 @@
+{# AOS-CX EVPN overlay — eBGP IPv6 LLA peers + l2vpn evpn #}
+router bgp {{ node.asn }}
+    router-id {{ (node.loopback_v6.compressed)[-7:-3] | replace(':', '.') }}
+    bgp log-neighbor-changes
+    maximum-paths 8
+    address-family ipv6 unicast
+    exit-address-family
+    address-family l2vpn evpn
+        retain route-target all
+    exit-address-family
+{% for p in peers %}
+    neighbor {{ p.local_iface }} interface remote-as external
+    neighbor {{ p.local_iface }} interface description "{{ p.description }}"
+    address-family ipv6 unicast
+        neighbor {{ p.local_iface }} interface activate
+    exit-address-family
+    address-family l2vpn evpn
+        neighbor {{ p.local_iface }} interface activate
+        neighbor {{ p.local_iface }} interface send-community extended
+    exit-address-family
+{% endfor %}
+!
+overlay
+    source-interface loopback0
+    encapsulation vxlan

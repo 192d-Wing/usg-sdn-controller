@@ -1,0 +1,52 @@
+{# AOS-CX tenant: VRF, L3VNI, L2VNI, distributed anycast GW (active-gateway) #}
+{% for t in tenants %}
+{% for vrf in t.vrfs %}
+vrf {{ t.name }}-{{ vrf.name }}
+    rd auto
+    address-family ipv6 unicast
+        route-target import {{ node.asn }}:{{ vrf.l3_vni }} evpn
+        route-target export {{ node.asn }}:{{ vrf.l3_vni }} evpn
+    address-family ipv4 unicast
+        route-target import {{ node.asn }}:{{ vrf.l3_vni }} evpn
+        route-target export {{ node.asn }}:{{ vrf.l3_vni }} evpn
+!
+vlan {{ 3900 + loop.index0 }}
+    name {{ t.name }}-{{ vrf.name }}-L3VNI
+    vni {{ vrf.l3_vni }}
+!
+interface vlan {{ 3900 + loop.index0 }}
+    vrf attach {{ t.name }}-{{ vrf.name }}
+    description L3VNI SVI for {{ vrf.name }}
+    mtu {{ fabric.mtu }}
+    ip mtu {{ fabric.mtu }}
+!
+{% endfor %}
+
+{% for l2 in t.l2_vnis %}
+vlan {{ l2.vlan_id }}
+    name {{ t.name }}-{{ l2.name }}
+    vni {{ l2.vni }}
+!
+{% if l2.name in t.anycast_gateways %}
+{% set gw = t.anycast_gateways[l2.name] %}
+interface vlan {{ l2.vlan_id }}
+    vrf attach {{ t.name }}-{{ (t.vrfs[0].name) if t.vrfs else 'default' }}
+    description anycast-gw for {{ l2.name }}
+    ipv6 address {{ gw.v6_gateway }}
+    active-gateway ipv6 mac {{ gw.anycast_mac }}
+    active-gateway ipv6 {{ gw.v6_gateway.ip }}
+{% if gw.v4_gateway %}
+    ip address {{ gw.v4_gateway }}
+    active-gateway ip mac {{ gw.anycast_mac }}
+{% endif %}
+    mtu {{ fabric.mtu }}
+!
+{% endif %}
+evpn
+    vlan {{ l2.vlan_id }}
+        rd auto
+        route-target import auto
+        route-target export auto
+!
+{% endfor %}
+{% endfor %}

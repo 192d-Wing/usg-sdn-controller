@@ -1,0 +1,59 @@
+{# Arista EOS tenant — symmetric IRB, anycast GW with "ip virtual-router" #}
+ip virtual-router mac-address {{ (tenants[0].anycast_gateways | first | default('00:00:5e:00:01:fe')) if false else '00:00:5e:00:01:fe' }}
+!
+{% for t in tenants %}
+{% for vrf in t.vrfs %}
+vrf instance {{ t.name }}-{{ vrf.name }}
+!
+ip routing vrf {{ t.name }}-{{ vrf.name }}
+ipv6 unicast-routing vrf {{ t.name }}-{{ vrf.name }}
+!
+interface Vlan{{ 3900 + loop.index0 }}
+   description L3VNI SVI for {{ vrf.name }}
+   vrf {{ t.name }}-{{ vrf.name }}
+   ip address virtual 169.254.0.1/32
+   mtu {{ fabric.mtu }}
+!
+vlan {{ 3900 + loop.index0 }}
+   name {{ t.name }}-{{ vrf.name }}-L3VNI
+!
+interface Vxlan1
+   vxlan vrf {{ t.name }}-{{ vrf.name }} vni {{ vrf.l3_vni }}
+!
+router bgp {{ node.asn }}
+   vrf {{ t.name }}-{{ vrf.name }}
+      rd auto
+      route-target import evpn {{ node.asn }}:{{ vrf.l3_vni }}
+      route-target export evpn {{ node.asn }}:{{ vrf.l3_vni }}
+      redistribute connected
+!
+{% endfor %}
+
+{% for l2 in t.l2_vnis %}
+vlan {{ l2.vlan_id }}
+   name {{ t.name }}-{{ l2.name }}
+!
+interface Vxlan1
+   vxlan vlan {{ l2.vlan_id }} vni {{ l2.vni }}
+!
+{% if l2.name in t.anycast_gateways %}
+{% set gw = t.anycast_gateways[l2.name] %}
+interface Vlan{{ l2.vlan_id }}
+   description anycast-gw for {{ l2.name }}
+   vrf {{ t.name }}-{{ (t.vrfs[0].name) if t.vrfs else 'default' }}
+   ipv6 enable
+   ipv6 address virtual {{ gw.v6_gateway }}
+{% if gw.v4_gateway %}
+   ip address virtual {{ gw.v4_gateway }}
+{% endif %}
+   mtu {{ fabric.mtu }}
+{% endif %}
+
+router bgp {{ node.asn }}
+   vlan {{ l2.vlan_id }}
+      rd auto
+      route-target both {{ node.asn }}:{{ l2.vni }}
+      redistribute learned
+!
+{% endfor %}
+{% endfor %}

@@ -1,0 +1,72 @@
+{# Junos (EX/QFX) — IPv6-only underlay with IS-IS L2 + BGP-unnumbered via IPv6 LLA.
+   Junos does not support "BGP unnumbered" natively; we emulate with a dynamic-neighbor
+   group that permits any link-local peer on the routed fabric interfaces. #}
+system {
+    host-name {{ node.name }};
+}
+interfaces {
+    lo0 {
+        unit 0 {
+            family inet6 {
+                address {{ node.loopback_v6 }}/128;
+            }
+        }
+    }
+{% for p in peers %}
+    {{ p.local_iface }} {
+        description "{{ p.description }}";
+        mtu {{ fabric.mtu }};
+        unit 0 {
+            family inet6;
+            family iso;
+        }
+    }
+{% endfor %}
+}
+protocols {
+    isis {
+        reference-bandwidth 400g;
+        level 1 disable;
+        level 2 wide-metrics-only;
+        interface lo0.0 {
+            passive;
+        }
+{% for p in peers %}
+        interface {{ p.local_iface }}.0 {
+            point-to-point;
+            level 2 metric 10;
+        }
+{% endfor %}
+    }
+    router-advertisement {
+{% for p in peers %}
+        interface {{ p.local_iface }}.0 {
+            managed-configuration;
+            other-stateful-configuration;
+            max-advertisement-interval 4;
+            min-advertisement-interval 3;
+        }
+{% endfor %}
+    }
+}
+routing-options {
+    router-id {{ (node.loopback_v6.compressed)[-4:] if false else '0.0.0.' ~ (loop.index if false else 1) }};
+    autonomous-system {{ node.asn }};
+    forwarding-table {
+        chained-composite-next-hop {
+            ingress {
+                evpn;
+            }
+        }
+    }
+}
+{# Emit the IS-IS NET on the loopback via iso family. #}
+interfaces {
+    lo0 {
+        unit 0 {
+            family iso {
+                address {{ node.isis_net }};
+            }
+        }
+    }
+}

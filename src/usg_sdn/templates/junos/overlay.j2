@@ -1,0 +1,62 @@
+{# Junos EVPN overlay: iBGP would be typical, but per intent we use eBGP with
+   IPv6 LLA dynamic neighbors. EVPN signalling on family evpn. #}
+policy-options {
+    policy-statement EVPN-EXPORT {
+        term loopback {
+            from {
+                route-filter {{ node.loopback_v6 }}/128 exact;
+            }
+            then accept;
+        }
+        then reject;
+    }
+    policy-statement EVPN-IMPORT {
+        then accept;
+    }
+}
+protocols {
+    bgp {
+        group FABRIC-UNDERLAY-V6 {
+            type external;
+            mtu-discovery;
+            multihop {
+                ttl 2;
+            }
+            local-as {{ node.asn }};
+            multipath multiple-as;
+            family inet6 unicast;
+            allow fe80::/10;
+            dynamic-neighbor FABRIC-UNDERLAY-V6 {
+{% for p in peers %}
+                peer-address-pool {{ p.local_iface }};
+{% endfor %}
+            }
+            export EVPN-EXPORT;
+        }
+        group FABRIC-EVPN {
+            type external;
+            local-as {{ node.asn }};
+            multihop {
+                ttl 3;
+            }
+            family evpn signaling;
+            allow fe80::/10;
+            dynamic-neighbor FABRIC-EVPN {
+{% for p in peers %}
+                peer-address-pool {{ p.local_iface }};
+{% endfor %}
+            }
+        }
+    }
+    evpn {
+        encapsulation vxlan;
+        extended-vni-list all;
+        multicast-mode ingress-replication;
+        default-gateway no-gateway-community;
+    }
+}
+switch-options {
+    vtep-source-interface lo0.0;
+    route-distinguisher {{ node.loopback_v6.compressed }}:1;
+    vrf-target target:{{ node.asn }}:0;
+}

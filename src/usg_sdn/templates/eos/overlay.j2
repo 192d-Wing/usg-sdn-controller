@@ -1,0 +1,33 @@
+{# Arista EOS EVPN overlay — BGP-unnumbered "neighbor interface" peer-group #}
+router bgp {{ node.asn }}
+   router-id ipv6 {{ node.loopback_v6 }}
+   no bgp default ipv4-unicast
+   maximum-paths 8 ecmp 8
+   neighbor UNDERLAY peer group
+   neighbor UNDERLAY remote-as external
+   neighbor UNDERLAY send-community
+   neighbor UNDERLAY maximum-routes 12000
+   neighbor EVPN peer group
+   neighbor EVPN remote-as external
+   neighbor EVPN update-source Loopback0
+   neighbor EVPN ebgp-multihop 3
+   neighbor EVPN send-community extended
+{% for p in peers %}
+   neighbor interface {{ p.local_iface }} peer-group UNDERLAY remote-as external
+{% endfor %}
+   !
+   address-family ipv6
+      redistribute connected
+      neighbor UNDERLAY activate
+   !
+   address-family evpn
+      neighbor EVPN activate
+!
+{% for p in peers %}
+interface {{ p.local_iface }}
+   ipv6 enable
+{% endfor %}
+
+interface Vxlan1
+   vxlan source-interface Loopback0
+   vxlan udp-port 4789

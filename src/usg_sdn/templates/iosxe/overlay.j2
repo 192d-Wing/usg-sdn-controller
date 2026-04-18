@@ -1,0 +1,30 @@
+{# IOS-XE EVPN overlay — explicit IPv6 link-local neighbors per interface.
+   Requires Catalyst 9300/9500/8000 with IOS-XE 17.6+ for EVPN VXLAN. #}
+l2vpn evpn
+ replication-type ingress
+ router-id Loopback0
+ default-gateway advertise enable
+
+router bgp {{ node.asn }}
+ bgp router-id {{ (node.loopback_v6.compressed)[-7:-3] | replace(':', '.') }}
+ bgp log-neighbor-changes
+ no bgp default ipv4-unicast
+ address-family ipv6 unicast
+  redistribute connected
+ address-family l2vpn evpn
+  retain route-target all
+{% for p in peers %}
+ neighbor peer-{{ p.local_iface | replace('/', '-') }} peer-group
+ neighbor peer-{{ p.local_iface | replace('/', '-') }} remote-as {{ node_by_name[p.remote_node].asn }}
+ neighbor peer-{{ p.local_iface | replace('/', '-') }} ebgp-multihop 2
+ neighbor peer-{{ p.local_iface | replace('/', '-') }} update-source {{ p.local_iface }}
+ {# Link-local neighbor: the operator must fill the remote LLA — or use a peer-discovery
+    script. In lab, derive LLA from MAC; here we emit a placeholder for the reconciler
+    to substitute via LLDP neighbor discovery. #}
+ neighbor FE80::%{{ p.local_iface }} peer-group peer-{{ p.local_iface | replace('/', '-') }}
+ address-family ipv6 unicast
+  neighbor FE80::%{{ p.local_iface }} activate
+ address-family l2vpn evpn
+  neighbor FE80::%{{ p.local_iface }} activate
+  neighbor FE80::%{{ p.local_iface }} send-community both
+{% endfor %}

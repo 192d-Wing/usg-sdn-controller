@@ -1,0 +1,54 @@
+{# IOS-XE tenant: VRF + L3VNI + L2VNI with distributed anycast GW #}
+{% for t in tenants %}
+{% for vrf in t.vrfs %}
+vrf definition {{ t.name }}-{{ vrf.name }}
+ rd auto
+ !
+ address-family ipv4
+  route-target export {{ node.asn }}:{{ vrf.l3_vni }}
+  route-target import {{ node.asn }}:{{ vrf.l3_vni }}
+ exit-address-family
+ address-family ipv6
+  route-target export {{ node.asn }}:{{ vrf.l3_vni }}
+  route-target import {{ node.asn }}:{{ vrf.l3_vni }}
+ exit-address-family
+
+l2vpn evpn instance {{ vrf.l3_vni }} vlan-based
+ encapsulation vxlan
+ rd auto
+ route-target import auto
+ route-target export auto
+
+interface Vlan{{ 3900 + loop.index0 }}
+ description L3VNI SVI for {{ vrf.name }}
+ vrf forwarding {{ t.name }}-{{ vrf.name }}
+ ipv6 enable
+ no ip address
+ mtu {{ fabric.mtu }}
+
+{% endfor %}
+
+{% for l2 in t.l2_vnis %}
+vlan {{ l2.vlan_id }}
+ name {{ t.name }}-{{ l2.name }}
+
+l2vpn evpn instance {{ l2.vni }} vlan-based
+ encapsulation vxlan
+ rd auto
+ route-target import auto
+ route-target export auto
+
+{% if l2.name in t.anycast_gateways %}
+{% set gw = t.anycast_gateways[l2.name] %}
+interface Vlan{{ l2.vlan_id }}
+ description anycast-gw for {{ l2.name }}
+ vrf forwarding {{ t.name }}-{{ (t.vrfs[0].name) if t.vrfs else 'default' }}
+{% if gw.v4_gateway %}
+ ip address {{ gw.v4_gateway.split('/')[0] }} {{ (gw.v4_gateway.split('/')[1] ~ '') }}
+{% endif %}
+ ipv6 address {{ gw.v6_gateway }}
+ ipv6 enable
+ mac-address {{ gw.anycast_mac.replace(':', '.') | lower | truncate(14, true, '') }}
+{% endif %}
+{% endfor %}
+{% endfor %}

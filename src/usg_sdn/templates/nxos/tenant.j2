@@ -1,0 +1,71 @@
+{# NX-OS tenant: VRF + L3VNI + L2VNIs with anycast-gateway IRB SVIs #}
+fabric forwarding anycast-gateway-mac 0000.5e00.01fe
+
+{% for t in tenants %}
+{% for vrf in t.vrfs %}
+vlan {{ 3900 + loop.index0 }}
+  name {{ t.name }}-{{ vrf.name }}-L3VNI
+  vn-segment {{ vrf.l3_vni }}
+
+vrf context {{ t.name }}-{{ vrf.name }}
+  vni {{ vrf.l3_vni }}
+  rd auto
+  address-family ipv6 unicast
+    route-target both auto
+    route-target both auto evpn
+  address-family ipv4 unicast
+    route-target both auto
+    route-target both auto evpn
+
+interface Vlan{{ 3900 + loop.index0 }}
+  description L3VNI SVI for VRF {{ vrf.name }}
+  no shutdown
+  vrf member {{ t.name }}-{{ vrf.name }}
+  ip forward
+  ipv6 forward
+  mtu {{ fabric.mtu }}
+
+router bgp {{ node.asn }}
+  vrf {{ t.name }}-{{ vrf.name }}
+    address-family ipv6 unicast
+      advertise l2vpn evpn
+    address-family ipv4 unicast
+      advertise l2vpn evpn
+
+interface nve1
+  member vni {{ vrf.l3_vni }} associate-vrf
+
+{% endfor %}
+
+{% for l2 in t.l2_vnis %}
+vlan {{ l2.vlan_id }}
+  name {{ t.name }}-{{ l2.name }}
+  vn-segment {{ l2.vni }}
+
+{% if l2.name in t.anycast_gateways %}
+{% set gw = t.anycast_gateways[l2.name] %}
+interface Vlan{{ l2.vlan_id }}
+  description anycast-gw for {{ l2.name }}
+  no shutdown
+  vrf member {{ t.name }}-{{ (t.vrfs[0].name) if t.vrfs else 'default' }}
+{% if gw.v4_gateway %}
+  ip address {{ gw.v4_gateway }}
+{% endif %}
+  ipv6 address {{ gw.v6_gateway }}
+  fabric forwarding mode anycast-gateway
+  mtu {{ fabric.mtu }}
+{% endif %}
+
+interface nve1
+  member vni {{ l2.vni }}
+    suppress-arp
+    ingress-replication protocol bgp
+
+evpn
+  vni {{ l2.vni }} l2
+    rd auto
+    route-target import auto
+    route-target export auto
+
+{% endfor %}
+{% endfor %}

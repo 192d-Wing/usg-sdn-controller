@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: sdn
+      POSTGRES_PASSWORD: sdn
+      POSTGRES_DB: sdn
+    ports: ["5432:5432"]
+    volumes: ["dbdata:/var/lib/postgresql/data"]
+
+  controller:
+    build: .
+    depends_on: [db]
+    environment:
+      USG_SDN_DB_URL: postgresql+asyncpg://sdn:sdn@db/sdn
+      USG_SDN_LOG_LEVEL: INFO
+    ports: ["8080:8080"]
+    command: ["uvicorn", "usg_sdn.api.app:app", "--host", "::", "--port", "8080"]
+
+volumes:
+  dbdata: {}

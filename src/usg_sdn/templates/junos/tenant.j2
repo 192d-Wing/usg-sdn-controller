@@ -1,0 +1,58 @@
+{# Junos tenant/VRF + L2 + L3 VNI (symmetric IRB, distributed anycast GW) #}
+{% for t in tenants %}
+{% for vrf in t.vrfs %}
+routing-instances {
+    {{ t.name }}-{{ vrf.name }} {
+        instance-type vrf;
+        interface irb.{{ vrf.l3_vni }};
+        route-distinguisher {{ node.loopback_v6.compressed }}:{{ vrf.l3_vni }};
+        vrf-target target:{{ node.asn }}:{{ vrf.l3_vni }};
+        protocols {
+            evpn {
+                ip-prefix-routes {
+                    advertise direct-nexthop;
+                    encapsulation vxlan;
+                    vni {{ vrf.l3_vni }};
+                }
+            }
+        }
+    }
+}
+{% endfor %}
+
+{% for l2 in t.l2_vnis %}
+vlans {
+    {{ t.name }}-{{ l2.name }} {
+        vlan-id {{ l2.vlan_id }};
+        vxlan {
+            vni {{ l2.vni }};
+            ingress-node-replication;
+        }
+{% if l2.name in t.anycast_gateways %}
+        l3-interface irb.{{ l2.vlan_id }};
+{% endif %}
+    }
+}
+{% if l2.name in t.anycast_gateways %}
+{% set gw = t.anycast_gateways[l2.name] %}
+interfaces {
+    irb {
+        unit {{ l2.vlan_id }} {
+            virtual-gateway-accept-data;
+            family inet6 {
+                address {{ gw.v6_gateway }} {
+                    virtual-gateway-address {{ gw.v6_gateway.ip }};
+                }
+            }
+{% if gw.v4_gateway %}
+            family inet {
+                address {{ gw.v4_gateway }};
+            }
+{% endif %}
+            mac {{ gw.anycast_mac }};
+        }
+    }
+}
+{% endif %}
+{% endfor %}
+{% endfor %}
