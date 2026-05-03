@@ -33,6 +33,7 @@ dependencies = [
   "structlog>=24.4",
   "tenacity>=9.0",
   "deepdiff>=8.0",
+  "pyjwt[crypto]>=2.10",
 ]
 
 [project.optional-dependencies]

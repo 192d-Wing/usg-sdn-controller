@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...allocator import allocate_persistent, pool_stats
+from ...auth import Scope, require_scopes
 from ...config import settings
 from ...reconciler import reconcile_once
 from ...reconciler.loop import push_device
@@ -21,7 +22,11 @@ class RenderResponse(BaseModel):
     config_text: str
 
 
-@router.post("/render", response_model=RenderResponse)
+@router.post(
+    "/render",
+    response_model=RenderResponse,
+    dependencies=[Depends(require_scopes(Scope.OPERATIONS_READ))],
+)
 async def render(
     device_name: str = Query(alias="device"),
     session: AsyncSession = Depends(get_session),
@@ -43,7 +48,11 @@ class DiffResponse(BaseModel):
     diff: str
 
 
-@router.post("/diff", response_model=DiffResponse)
+@router.post(
+    "/diff",
+    response_model=DiffResponse,
+    dependencies=[Depends(require_scopes(Scope.OPERATIONS_READ))],
+)
 async def diff(
     device_name: str = Query(alias="device"),
     session: AsyncSession = Depends(get_session),
@@ -63,7 +72,10 @@ async def diff(
     return DiffResponse(device=device_name, drift=bool(d), diff=d)
 
 
-@router.post("/push")
+@router.post(
+    "/push",
+    dependencies=[Depends(require_scopes(Scope.OPERATIONS_PUSH))],
+)
 async def push(
     device_name: str = Query(alias="device"),
     confirm: bool = Query(default=False, description="Must be true to push."),
@@ -91,7 +103,11 @@ class PoolStatusResponse(BaseModel):
     alarm: bool
 
 
-@router.get("/pool-status", response_model=PoolStatusResponse)
+@router.get(
+    "/pool-status",
+    response_model=PoolStatusResponse,
+    dependencies=[Depends(require_scopes(Scope.OPERATIONS_READ))],
+)
 async def pool_status(session: AsyncSession = Depends(get_session)) -> PoolStatusResponse:
     intent = await IntentRepo(session).load()
     if intent is None:
@@ -115,7 +131,10 @@ async def pool_status(session: AsyncSession = Depends(get_session)) -> PoolStatu
     )
 
 
-@router.post("/reconcile")
+@router.post(
+    "/reconcile",
+    dependencies=[Depends(require_scopes(Scope.OPERATIONS_RECONCILE))],
+)
 async def reconcile() -> list[dict]:
     reports = await reconcile_once()
     return [

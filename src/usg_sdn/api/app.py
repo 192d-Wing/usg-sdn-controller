@@ -9,7 +9,7 @@ from ..config import settings
 from ..logging import configure_logging, log
 from ..reconciler import Reconciler
 from ..store import init_db
-from .routes import devices, intent, operations
+from .routes import auth, devices, intent, operations
 
 
 @asynccontextmanager
@@ -33,6 +33,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.include_router(auth.router, prefix="/auth", tags=["auth"])
 app.include_router(intent.router, prefix="/intent", tags=["intent"])
 app.include_router(devices.router, prefix="/devices", tags=["devices"])
 app.include_router(operations.router, prefix="/operations", tags=["operations"])

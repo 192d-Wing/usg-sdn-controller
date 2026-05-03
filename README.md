@@ -84,6 +84,45 @@ the right call.
 - Every push stages through the vendor's candidate store (NETCONF) or a REST
   checkpoint (AOS-CX) with rollback-on-error.
 
+## Authentication & authorization
+
+The API ships with two credential kinds and scope-based authorization:
+
+- **API tokens** — `usgsdn_pat_*` opaque bearer tokens, hashed in the
+  `api_token` table. Mint with `sdnctl token create` or `POST /auth/tokens`.
+- **OIDC** — externally-issued JWTs validated against an issuer's JWKS
+  (`USG_SDN_OIDC_ISSUER`, `USG_SDN_OIDC_AUDIENCE`). The controller is a
+  resource server only; it doesn't run OAuth flows.
+
+`USG_SDN_AUTH_ENABLED=false` (the default) skips all auth and assigns every
+request a synthetic `anonymous` principal with all scopes — convenient for
+dev, **never use in production**. Set it to `true` for any real deployment.
+
+Built-in scopes:
+
+| Scope                  | Routes                                               |
+|------------------------|------------------------------------------------------|
+| `intent:read`          | `GET /intent`                                        |
+| `intent:write`         | `PUT /intent`                                        |
+| `devices:read`         | `GET /devices`, `GET /devices/{name}`                |
+| `devices:write`        | `PUT /devices/{name}`                                |
+| `operations:read`      | `/operations/render`, `/diff`, `/pool-status`        |
+| `operations:reconcile` | `POST /operations/reconcile`                         |
+| `operations:push`      | `POST /operations/push` ⚠️ device-mutating          |
+| `auth:read`            | `GET /auth/me`, `GET /auth/tokens`                   |
+| `auth:write`           | `POST /auth/tokens`, `DELETE /auth/tokens/{id}`     |
+
+Convenience role bundles: `viewer` ⊂ `operator` ⊂ `admin`.
+
+```bash
+# Mint a token for CI with read-only scope
+sdnctl token create --name ci-bot --role viewer
+
+# Use it
+curl -H "Authorization: Bearer usgsdn_pat_xxxxx.yyyy..." \
+     http://controller:8080/intent
+```
+
 ## Integration test
 
 `make integration` brings up a six-node cEOS-lab fabric under

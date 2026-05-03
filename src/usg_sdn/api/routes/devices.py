@@ -4,18 +4,27 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ...auth import Scope, require_scopes
 from ...models.inventory import Device
 from ...store import DeviceRepo, get_session
 
 router = APIRouter()
 
 
-@router.get("", response_model=list[Device])
+@router.get(
+    "",
+    response_model=list[Device],
+    dependencies=[Depends(require_scopes(Scope.DEVICES_READ))],
+)
 async def list_devices(session: AsyncSession = Depends(get_session)) -> list[Device]:
     return await DeviceRepo(session).list()
 
 
-@router.put("/{name}", response_model=Device)
+@router.put(
+    "/{name}",
+    response_model=Device,
+    dependencies=[Depends(require_scopes(Scope.DEVICES_WRITE))],
+)
 async def upsert_device(
     name: str,
     device: Device,
@@ -30,7 +39,11 @@ async def upsert_device(
     return device
 
 
-@router.get("/{name}", response_model=Device)
+@router.get(
+    "/{name}",
+    response_model=Device,
+    dependencies=[Depends(require_scopes(Scope.DEVICES_READ))],
+)
 async def get_device(name: str, session: AsyncSession = Depends(get_session)) -> Device:
     device = await DeviceRepo(session).get(name)
     if device is None:

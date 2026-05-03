@@ -10,15 +10,19 @@ from rich import print as rprint
 from rich.syntax import Syntax
 from rich.table import Table
 
+from ..auth.models import Scope, role_scopes
+from ..auth.tokens import mint
 from ..drivers import driver_for
 from ..models.intent import IntentDocument
 from ..models.inventory import Device, DeviceCredential, Vendor
 from ..reconciler import reconcile_once
 from ..reconciler.loop import push_device
 from ..render import config_diff, render_device
-from ..store import DeviceRepo, IntentRepo, get_session, init_db
+from ..store import AuthRepo, DeviceRepo, IntentRepo, get_session, init_db
 
 app = typer.Typer(add_completion=False, help="Campus EVPN SDN controller CLI.")
+token_app = typer.Typer(help="API-token management.")
+app.add_typer(token_app, name="token")
 
 
 def _load_intent(path: Path) -> IntentDocument:
@@ -159,6 +163,97 @@ def reconcile() -> None:
         for r in reports:
             table.add_row(r.device, r.status.value, "yes" if r.diff else "no")
         rprint(table)
+    asyncio.run(_go())
+
+
+# --- token subcommands ---------------------------------------------------
+
+
+@token_app.command("create")
+def token_create(
+    name: str = typer.Option(..., help="Human-readable label."),
+    role: str | None = typer.Option(None, help="viewer | operator | admin"),
+    scope: list[str] = typer.Option(
+        [],
+        "--scope",
+        "-s",
+        help="Scope to add (repeatable). Combined with --role.",
+    ),
+) -> None:
+    """Mint a new API token. The plaintext is shown once — store it now."""
+    requested: set[Scope] = set()
+    if role:
+        try:
+            requested |= set(role_scopes(role))
+        except ValueError as e:
+            rprint(f"[red]{e}[/red]")
+            raise typer.Exit(code=2) from e
+    for s in scope:
+        try:
+            requested.add(Scope(s))
+        except ValueError as e:
+            rprint(f"[red]unknown scope {s!r}[/red]")
+            raise typer.Exit(code=2) from e
+    if not requested:
+        rprint("[red]no scopes requested (pass --role or one or more --scope)[/red]")
+        raise typer.Exit(code=2)
+
+    async def _go() -> None:
+        await init_db()
+        async for session in get_session():
+            minted = mint()
+            await AuthRepo(session).create(
+                token_id=minted.id,
+                name=name,
+                secret_hash=minted.secret_hash,
+                prefix=minted.prefix,
+                scopes=sorted(s.value for s in requested),
+            )
+            rprint(f"[green]token created:[/green] id={minted.id} name={name}")
+            rprint(f"[bold]token (shown once):[/bold] {minted.plaintext}")
+
+    asyncio.run(_go())
+
+
+@token_app.command("list")
+def token_list() -> None:
+    async def _go() -> None:
+        await init_db()
+        async for session in get_session():
+            rows = await AuthRepo(session).list(include_revoked=True)
+            t = Table(title="API tokens")
+            t.add_column("ID")
+            t.add_column("Name")
+            t.add_column("Prefix")
+            t.add_column("Scopes")
+            t.add_column("Last used")
+            t.add_column("Revoked")
+            for r in rows:
+                t.add_row(
+                    r.id,
+                    r.name,
+                    r.prefix,
+                    ", ".join(r.scopes or []),
+                    r.last_used_at.isoformat() if r.last_used_at else "-",
+                    r.revoked_at.isoformat() if r.revoked_at else "-",
+                )
+            rprint(t)
+
+    asyncio.run(_go())
+
+
+@token_app.command("revoke")
+def token_revoke(token_id: str = typer.Argument(...)) -> None:
+    async def _go() -> None:
+        await init_db()
+        async for session in get_session():
+            ok = await AuthRepo(session).revoke(token_id)
+            if ok:
+                rprint(f"[green]revoked[/green] {token_id}")
+            else:
+                rprint(f"[red]not found or already revoked[/red] {token_id}")
+                raise typer.Exit(code=1)
+
     asyncio.run(_go())
 
 

@@ -1,4 +1,4 @@
 from .db import Base, get_session, init_db
-from .repo import DeviceRepo, IntentRepo, StateRepo
+from .repo import AuthRepo, DeviceRepo, IntentRepo, StateRepo
 
-__all__ = ["Base", "DeviceRepo", "IntentRepo", "StateRepo", "get_session", "init_db"]
+__all__ = ["AuthRepo", "Base", "DeviceRepo", "IntentRepo", "StateRepo", "get_session", "init_db"]

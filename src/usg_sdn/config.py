@@ -27,6 +27,33 @@ class Settings(BaseSettings):
     link_pool_warn_threshold: float = 0.75
     link_pool_gc: bool = True
 
+    # --- auth -----------------------------------------------------------
+    auth_enabled: bool = False
+    """Master switch. When False, every request gets a synthetic
+    'anonymous' principal with all scopes — convenient for dev, NOT for prod."""
+
+    api_token_prefix: str = "usgsdn_pat_"
+    """Constant prefix on every minted API token; helps secret-scanners
+    recognise leaked tokens."""
+
+    oidc_issuer: str | None = None
+    """Expected ``iss`` claim. If unset, OIDC validation is disabled and
+    only API tokens are accepted."""
+
+    oidc_audience: str | None = None
+    """Expected ``aud`` claim."""
+
+    oidc_jwks_url: str | None = None
+    """JWKS endpoint — usually ``{issuer}/.well-known/jwks.json``. If unset
+    and ``oidc_issuer`` is set, derived from the issuer."""
+
+    oidc_jwks_cache_sec: int = 3600
+    """How long to cache fetched JWKS keys before re-fetching."""
+
+    oidc_scope_claim: str = "scope"
+    """Claim that carries scopes — ``scope`` (RFC 8693, space-separated)
+    or ``scopes`` (array). Both forms are accepted regardless."""
+
     device_ssh_user: str = "sdn"
     device_ssh_key: Path = Field(default=Path("~/.ssh/id_ed25519"))
     device_ssh_timeout_sec: int = 30

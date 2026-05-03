@@ -1,7 +1,9 @@
 """SQLAlchemy ORM mappings for persisted intent, inventory, and state."""
 from __future__ import annotations
 
-from sqlalchemy import JSON, String, Text
+from datetime import datetime
+
+from sqlalchemy import JSON, DateTime, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .db import Base, TimestampMixin
@@ -33,6 +35,20 @@ class DeviceStateRow(Base, TimestampMixin):
     running_config_hash: Mapped[str | None] = mapped_column(String(64))
     message: Mapped[str | None] = mapped_column(Text)
     rendered_config: Mapped[str | None] = mapped_column(Text)
+
+
+class ApiTokenRow(Base, TimestampMixin):
+    """Persistent API tokens (hashed)."""
+
+    __tablename__ = "api_token"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    secret_hash: Mapped[str] = mapped_column(String(128), nullable=False)
+    prefix: Mapped[str] = mapped_column(String(64), nullable=False)
+    scopes: Mapped[list] = mapped_column(JSON, default=list)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class LinkAddressRow(Base, TimestampMixin):

@@ -4,10 +4,12 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from datetime import datetime, timezone
+
 from ..models.intent import IntentDocument
 from ..models.inventory import Device, DeviceCredential, Vendor
 from ..models.state import DeviceState, DeviceStatus
-from .models_sql import DeviceRow, DeviceStateRow, IntentRow
+from .models_sql import ApiTokenRow, DeviceRow, DeviceStateRow, IntentRow
 
 
 class IntentRepo:
@@ -83,6 +85,52 @@ class DeviceRepo:
             )
             for r in result.scalars().all()
         ]
+
+
+class AuthRepo:
+    """CRUD for ``api_token`` rows. The plaintext token is never stored —
+    callers must persist it themselves at creation time and discard."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._s = session
+
+    async def create(
+        self,
+        *,
+        token_id: str,
+        name: str,
+        secret_hash: str,
+        prefix: str,
+        scopes: list[str],
+    ) -> ApiTokenRow:
+        row = ApiTokenRow(
+            id=token_id,
+            name=name,
+            secret_hash=secret_hash,
+            prefix=prefix,
+            scopes=scopes,
+        )
+        self._s.add(row)
+        await self._s.commit()
+        return row
+
+    async def list(self, *, include_revoked: bool = False) -> list[ApiTokenRow]:
+        stmt = select(ApiTokenRow)
+        if not include_revoked:
+            stmt = stmt.where(ApiTokenRow.revoked_at.is_(None))
+        rows = (await self._s.execute(stmt)).scalars().all()
+        return list(rows)
+
+    async def get(self, token_id: str) -> ApiTokenRow | None:
+        return await self._s.get(ApiTokenRow, token_id)
+
+    async def revoke(self, token_id: str) -> bool:
+        row = await self._s.get(ApiTokenRow, token_id)
+        if row is None or row.revoked_at is not None:
+            return False
+        row.revoked_at = datetime.now(timezone.utc)
+        await self._s.commit()
+        return True
 
 
 class StateRepo:
